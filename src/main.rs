@@ -16,6 +16,7 @@ struct Shape {
     y: f32,
     color: Color,
     kind: ShapeType,
+    collided: bool,
 }
 
 impl Shape {
@@ -53,6 +54,7 @@ async fn main() {
     let mut gameover = false;
 
     let mut squares = vec![];
+    let mut bullets: Vec<Shape> = vec![];
     let mut circle = Shape {
         size: CIRCLE_SIZE,
         speed: MOVEMENT_SPEED,
@@ -60,6 +62,7 @@ async fn main() {
         y: screen_height() / 2.0,
         color: YELLOW,
         kind: ShapeType::Circle,
+        collided: false,
     };
 
     loop {
@@ -77,18 +80,36 @@ async fn main() {
                 y: -size,
                 color: *vec![DARKPURPLE, RED, MAGENTA].choose().unwrap(),
                 kind: ShapeType::Square,
+                collided: false,
             })
         }
 
-        // UPDATE SQUARES
         if !gameover {
+            // UPDATE SQUARES
             for square in &mut squares {
                 square.y += square.speed * delta_time;
             }
+            // UPDATE BULLETS
+            for bullet in &mut bullets {
+                bullet.y -= bullet.speed * delta_time;
+            }
+            bullets.retain(|bullet| bullet.y > 0.0 - bullet.size / 2.0);
         }
 
-        // CLEAN UP SQUARES
+        // CHECK BULLET COLLISION
+        for square in squares.iter_mut() {
+            for bullet in bullets.iter_mut() {
+                if bullet.collides_with(square) {
+                    bullet.collided = true;
+                    square.collided = true;
+                }
+            }
+        }
+
+        // CLEAN UP SQUARES AND BULLETS
         squares.retain(|square| square.y < screen_height() + square.size);
+        squares.retain(|square| !square.collided);
+        bullets.retain(|bullet| !bullet.collided);
 
         // DRAW SQUARES
         for square in &squares {
@@ -115,13 +136,26 @@ async fn main() {
             if is_key_down(KeyCode::Up) {
                 circle.y -= MOVEMENT_SPEED * delta_time;
             }
+            if is_key_pressed(KeyCode::Space) {
+                bullets.push(Shape {
+                    x: circle.x,
+                    y: circle.y,
+                    speed: circle.speed * 2.0,
+                    size: 5.0,
+                    collided: false,
+                    color: RED,
+                    kind: ShapeType::Circle,
+                });
+            }
 
+            // CHECK SQUARE COLLISION
             if squares.iter().any(|square| circle.collides_with(square)) {
                 gameover = true
             }
         } else {
             if is_key_pressed(KeyCode::Space) {
                 squares.clear();
+                bullets.clear();
                 circle.x = screen_width() / 2.0;
                 circle.y = screen_height() / 2.0;
                 gameover = false;
@@ -130,6 +164,12 @@ async fn main() {
         circle.x = clamp(circle.x, circle.size, screen_width() - circle.size);
         circle.y = clamp(circle.y, circle.size, screen_height() - circle.size);
 
+        // DRAW BULLETS
+        for bullet in &bullets {
+            draw_circle(bullet.x, bullet.y, bullet.size / 2.0, bullet.color);
+        }
+
+        // DRAW CIRCLE
         draw_circle(circle.x, circle.y, circle.size, circle.color);
 
         if gameover {
