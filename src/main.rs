@@ -48,11 +48,18 @@ impl Shape {
     }
 }
 
+enum GameState {
+    MainMenu,
+    Playing,
+    Paused,
+    GameOver,
+}
+
 #[macroquad::main("BasicShapes")]
 async fn main() {
     rand::srand(miniquad::date::now() as u64);
 
-    let mut gameover = false;
+    let mut game_state = GameState::MainMenu;
 
     let mut squares = vec![];
     let mut bullets: Vec<Shape> = vec![];
@@ -76,48 +83,141 @@ async fn main() {
 
         let delta_time = get_frame_time();
 
-        // MAKE SQUARES
-        if rand::gen_range(0, 99) >= 95 {
-            let size = rand::gen_range(16.0, 64.0);
-            squares.push(Shape {
-                size,
-                speed: rand::gen_range(50.0, 150.0),
-                x: rand::gen_range(size / 2.0, screen_width() - size / 2.0),
-                y: -size,
-                color: *vec![DARKPURPLE, RED, MAGENTA].choose().unwrap(),
-                kind: ShapeType::Square,
-                collided: false,
-            })
-        }
-
-        if !gameover {
-            // UPDATE SQUARES
-            for square in &mut squares {
-                square.y += square.speed * delta_time;
-            }
-            // UPDATE BULLETS
-            for bullet in &mut bullets {
-                bullet.y -= bullet.speed * delta_time;
-            }
-            bullets.retain(|bullet| bullet.y > 0.0 - bullet.size / 2.0);
-        }
-
-        // CHECK BULLET COLLISION
-        for square in squares.iter_mut() {
-            for bullet in bullets.iter_mut() {
-                if bullet.collides_with(square) {
-                    bullet.collided = true;
-                    square.collided = true;
-                    score += square.size.round() as u32;
-                    high_score = high_score.max(score);
+        match game_state {
+            GameState::MainMenu => {
+                if is_key_pressed(KeyCode::Escape) {
+                    std::process::exit(0);
                 }
+                if is_key_pressed(KeyCode::Space) {
+                    squares.clear();
+                    bullets.clear();
+                    circle.x = screen_width() / 2.0;
+                    circle.y = screen_height() / 2.0;
+                    score = 0;
+                    game_state = GameState::Playing;
+                }
+                let text = "Press space";
+                let text_dimensions = measure_text(text, None, 50, 1.0);
+                draw_text(
+                    text,
+                    screen_width() / 2.0 - text_dimensions.width / 2.0,
+                    screen_height() / 2.0,
+                    50.0,
+                    WHITE,
+                );
+            }
+            GameState::Playing => {
+                // MAKE SQUARES
+                if rand::gen_range(0, 99) >= 95 {
+                    let size = rand::gen_range(16.0, 64.0);
+                    squares.push(Shape {
+                        size,
+                        speed: rand::gen_range(50.0, 150.0),
+                        x: rand::gen_range(size / 2.0, screen_width() - size / 2.0),
+                        y: -size,
+                        color: *vec![DARKPURPLE, RED, MAGENTA].choose().unwrap(),
+                        kind: ShapeType::Square,
+                        collided: false,
+                    })
+                }
+
+                // UPDATE SQUARES
+                for square in &mut squares {
+                    square.y += square.speed * delta_time;
+                }
+
+                // UPDATE BULLETS
+                for bullet in &mut bullets {
+                    bullet.y -= bullet.speed * delta_time;
+                }
+                bullets.retain(|bullet| bullet.y > 0.0 - bullet.size / 2.0);
+
+                // CHECK BULLET COLLISION
+                for square in squares.iter_mut() {
+                    for bullet in bullets.iter_mut() {
+                        if bullet.collides_with(square) {
+                            bullet.collided = true;
+                            square.collided = true;
+                            score += square.size.round() as u32;
+                            high_score = high_score.max(score);
+                        }
+                    }
+                }
+
+                // CLEAN UP SQUARES AND BULLETS
+                squares.retain(|square| square.y < screen_height() + square.size);
+                squares.retain(|square| !square.collided);
+                bullets.retain(|bullet| !bullet.collided);
+
+                // CIRCLE
+                if is_key_down(KeyCode::Right) {
+                    circle.x += MOVEMENT_SPEED * delta_time;
+                }
+                if is_key_down(KeyCode::Left) {
+                    circle.x -= MOVEMENT_SPEED * delta_time;
+                }
+                if is_key_down(KeyCode::Down) {
+                    circle.y += MOVEMENT_SPEED * delta_time;
+                }
+                if is_key_down(KeyCode::Up) {
+                    circle.y -= MOVEMENT_SPEED * delta_time;
+                }
+                if is_key_pressed(KeyCode::Space) {
+                    bullets.push(Shape {
+                        x: circle.x,
+                        y: circle.y,
+                        speed: circle.speed * 2.0,
+                        size: 5.0,
+                        collided: false,
+                        color: RED,
+                        kind: ShapeType::Circle,
+                    });
+                }
+                if is_key_pressed(KeyCode::Escape) {
+                    game_state = GameState::Paused;
+                }
+
+                // CHECK SQUARE COLLISION
+                if squares.iter().any(|square| circle.collides_with(square)) {
+                    // write high score to disk
+                    if score == high_score {
+                        fs::write("highscore.dat", high_score.to_string()).ok();
+                    }
+                    game_state = GameState::GameOver;
+                }
+
+                circle.x = clamp(circle.x, circle.size, screen_width() - circle.size);
+                circle.y = clamp(circle.y, circle.size, screen_height() - circle.size);
+            }
+            GameState::Paused => {
+                if is_key_pressed(KeyCode::Space) {
+                    game_state = GameState::Playing;
+                }
+                let text = "Paused";
+                let text_dimensions = measure_text(text, None, 50, 1.0);
+                draw_text(
+                    text,
+                    screen_width() / 2.0 - text_dimensions.width / 2.0,
+                    screen_height() / 2.0,
+                    50.0,
+                    WHITE,
+                );
+            }
+            GameState::GameOver => {
+                if is_key_pressed(KeyCode::Space) {
+                    game_state = GameState::MainMenu;
+                }
+                let text = "GAME OVER!";
+                let text_dimensions = measure_text(text, None, 50, 1.0);
+                draw_text(
+                    text,
+                    screen_width() / 2.0 - text_dimensions.width / 2.0,
+                    screen_height() / 2.0,
+                    50.0,
+                    RED,
+                );
             }
         }
-
-        // CLEAN UP SQUARES AND BULLETS
-        squares.retain(|square| square.y < screen_height() + square.size);
-        squares.retain(|square| !square.collided);
-        bullets.retain(|bullet| !bullet.collided);
 
         // DRAW SQUARES
         for square in &squares {
@@ -129,53 +229,6 @@ async fn main() {
                 square.color,
             );
         }
-
-        // CIRCLE
-        if !gameover {
-            if is_key_down(KeyCode::Right) {
-                circle.x += MOVEMENT_SPEED * delta_time;
-            }
-            if is_key_down(KeyCode::Left) {
-                circle.x -= MOVEMENT_SPEED * delta_time;
-            }
-            if is_key_down(KeyCode::Down) {
-                circle.y += MOVEMENT_SPEED * delta_time;
-            }
-            if is_key_down(KeyCode::Up) {
-                circle.y -= MOVEMENT_SPEED * delta_time;
-            }
-            if is_key_pressed(KeyCode::Space) {
-                bullets.push(Shape {
-                    x: circle.x,
-                    y: circle.y,
-                    speed: circle.speed * 2.0,
-                    size: 5.0,
-                    collided: false,
-                    color: RED,
-                    kind: ShapeType::Circle,
-                });
-            }
-
-            // CHECK SQUARE COLLISION
-            if squares.iter().any(|square| circle.collides_with(square)) {
-                // write high score to disk
-                if score == high_score {
-                    fs::write("highscore.dat", high_score.to_string()).ok();
-                }
-                gameover = true
-            }
-        } else {
-            if is_key_pressed(KeyCode::Space) {
-                squares.clear();
-                bullets.clear();
-                circle.x = screen_width() / 2.0;
-                circle.y = screen_height() / 2.0;
-                score = 0;
-                gameover = false;
-            }
-        }
-        circle.x = clamp(circle.x, circle.size, screen_width() - circle.size);
-        circle.y = clamp(circle.y, circle.size, screen_height() - circle.size);
 
         // DRAW BULLETS
         for bullet in &bullets {
@@ -202,18 +255,6 @@ async fn main() {
             25.0,
             WHITE,
         );
-
-        if gameover {
-            let text = "GAME OVER!";
-            let text_dimensions = measure_text(text, None, 50, 1.0);
-            draw_text(
-                text,
-                screen_width() / 2.0 - text_dimensions.width / 2.0,
-                screen_height() / 2.0 - text_dimensions.offset_y,
-                50.0,
-                RED,
-            );
-        }
 
         next_frame().await
     }
