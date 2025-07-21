@@ -1,5 +1,6 @@
 use macroquad::prelude::*;
 use macroquad::rand::ChooseRandom;
+use macroquad_particles::{self as particles, ColorCurve, Emitter, EmitterConfig};
 use std::fs;
 
 const MOVEMENT_SPEED: f32 = 300.0;
@@ -72,6 +73,28 @@ enum GameState {
     GameOver,
 }
 
+fn particle_explosion() -> particles::EmitterConfig {
+    particles::EmitterConfig {
+        local_coords: false,
+        one_shot: true,
+        emitting: true,
+        lifetime: 0.6,
+        lifetime_randomness: 0.3,
+        explosiveness: 0.65,
+        initial_direction_spread: 2.0 * std::f32::consts::PI,
+        initial_velocity: 300.0,
+        initial_velocity_randomness: 0.8,
+        size: 3.0,
+        size_randomness: 0.3,
+        colors_curve: ColorCurve {
+            start: RED,
+            mid: ORANGE,
+            end: RED,
+        },
+        ..Default::default()
+    }
+}
+
 #[macroquad::main("BasicShapes")]
 async fn main() {
     rand::srand(miniquad::date::now() as u64);
@@ -99,6 +122,7 @@ async fn main() {
 
     let mut squares = vec![];
     let mut bullets: Vec<Shape> = vec![];
+    let mut explosions: Vec<(Emitter, Vec2)> = vec![];
     let mut circle = Shape {
         size: CIRCLE_SIZE,
         speed: MOVEMENT_SPEED,
@@ -191,14 +215,22 @@ async fn main() {
                             square.collided = true;
                             score += square.size.round() as u32;
                             high_score = high_score.max(score);
+                            explosions.push((
+                                Emitter::new(EmitterConfig {
+                                    amount: square.size.round() as u32 * 2,
+                                    ..particle_explosion()
+                                }),
+                                vec2(square.x, square.y),
+                            ));
                         }
                     }
                 }
 
-                // CLEAN UP SQUARES AND BULLETS
+                // CLEAN UP SQUARES AND BULLETS AND EXPLOSIONS
                 squares.retain(|square| square.y < screen_height() + square.size);
                 squares.retain(|square| !square.collided);
                 bullets.retain(|bullet| !bullet.collided);
+                explosions.retain(|(explosion, _)| explosion.config.emitting);
 
                 // CIRCLE
                 if is_key_down(KeyCode::Right) {
@@ -281,6 +313,11 @@ async fn main() {
                 square.size,
                 square.color,
             );
+        }
+
+        // DRAW EXPLOSIONS
+        for (explosion, coords) in explosions.iter_mut() {
+            explosion.draw(*coords);
         }
 
         // DRAW BULLETS
