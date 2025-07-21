@@ -95,6 +95,26 @@ fn particle_explosion() -> particles::EmitterConfig {
     }
 }
 
+fn particle_rocket() -> particles::EmitterConfig {
+    particles::EmitterConfig {
+        local_coords: false,
+        emitting: false,
+        shape: particles::ParticleShape::Circle { subdivisions: 8 },
+        one_shot: false,
+        lifetime: 0.4,
+        initial_velocity: 300.,
+        initial_direction: vec2(0., 1.),
+        initial_direction_spread: 0.1,
+        size: 2.0,
+        colors_curve: ColorCurve {
+            start: YELLOW,
+            mid: ORANGE,
+            end: RED,
+        },
+        ..Default::default()
+    }
+}
+
 #[macroquad::main("BasicShapes")]
 async fn main() {
     rand::srand(miniquad::date::now() as u64);
@@ -132,6 +152,9 @@ async fn main() {
         kind: ShapeType::Circle,
         collided: false,
     };
+    let mut circle_particles = Emitter::new(particle_rocket());
+    let mut p_time = 0.;
+    let p_timer = 0.1;
 
     let mut score: u32 = 0;
     let mut high_score: u32 = fs::read_to_string("highscore.dat")
@@ -262,6 +285,13 @@ async fn main() {
                     game_state = GameState::Paused;
                 }
 
+                // CIRCLE PARTICLES
+                p_time += delta_time;
+                if p_time > p_timer {
+                    circle_particles.emit(vec2(circle.x, circle.y), 1);
+                    p_time -= p_timer;
+                }
+
                 // CHECK SQUARE COLLISION
                 if squares.iter().any(|square| circle.collides_with(square)) {
                     // write high score to disk
@@ -326,6 +356,7 @@ async fn main() {
         }
 
         // DRAW CIRCLE
+        circle_particles.draw(vec2(0., 0.));
         draw_circle(circle.x, circle.y, circle.size, circle.color);
 
         // DRAW SCORE
