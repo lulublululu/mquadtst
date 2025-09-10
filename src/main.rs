@@ -30,6 +30,12 @@ enum ShapeType {
     Square,
 }
 
+enum EnemySize {
+    Small,
+    Medium,
+    Large,
+}
+
 struct Shape {
     size: f32,
     speed: f32,
@@ -131,6 +137,21 @@ async fn main() {
         .expect("Couldn't load file");
     explosion_texture.set_filter(FilterMode::Nearest);
 
+    let enemy_small_texture: Texture2D = load_texture("enemy-small.png")
+        .await
+        .expect("Couldn't load file");
+    enemy_small_texture.set_filter(FilterMode::Nearest);
+
+    let enemy_medium_texture: Texture2D = load_texture("enemy-medium.png")
+        .await
+        .expect("Couldn't load file");
+    enemy_medium_texture.set_filter(FilterMode::Nearest);
+
+    let enemy_large_texture: Texture2D = load_texture("enemy-big.png")
+        .await
+        .expect("Couldn't load file");
+    enemy_large_texture.set_filter(FilterMode::Nearest);
+
     // prepare assets
     build_textures_atlas();
 
@@ -179,6 +200,42 @@ async fn main() {
                 fps: 12,
             },
         ],
+        true,
+    );
+
+    let mut enemy_small_sprite = AnimatedSprite::new(
+        17,
+        16,
+        &[Animation {
+            name: "enemy_small".to_string(),
+            row: 0,
+            frames: 2,
+            fps: 12,
+        }],
+        true,
+    );
+
+    let mut enemy_medium_sprite = AnimatedSprite::new(
+        32,
+        16,
+        &[Animation {
+            name: "enemy_medium".to_string(),
+            row: 0,
+            frames: 2,
+            fps: 12,
+        }],
+        true,
+    );
+
+    let mut enemy_large_sprite = AnimatedSprite::new(
+        32,
+        32,
+        &[Animation {
+            name: "enemy_large".to_string(),
+            row: 0,
+            frames: 2,
+            fps: 12,
+        }],
         true,
     );
 
@@ -375,6 +432,9 @@ async fn main() {
                 // UPDATE ANIMS
                 ship_sprite.update();
                 bullet_sprite.update();
+                enemy_small_sprite.update();
+                enemy_medium_sprite.update();
+                enemy_large_sprite.update();
             }
             GameState::Paused => {
                 if is_key_pressed(KeyCode::Space) {
@@ -408,12 +468,32 @@ async fn main() {
 
         // DRAW SQUARES
         for square in &squares {
-            draw_rectangle(
+            let enemy_size = match square.size {
+                ..24.0 => EnemySize::Small,
+                24.0..48.0 => EnemySize::Medium,
+                48.0.. => EnemySize::Large,
+                _ => EnemySize::Small,
+            };
+            let enemy_texture = match enemy_size {
+                EnemySize::Small => &enemy_small_texture,
+                EnemySize::Medium => &enemy_medium_texture,
+                EnemySize::Large => &enemy_large_texture,
+            };
+            let enemy_frame = match enemy_size {
+                EnemySize::Small => enemy_small_sprite.frame(),
+                EnemySize::Medium => enemy_medium_sprite.frame(),
+                EnemySize::Large => enemy_large_sprite.frame(),
+            };
+            draw_texture_ex(
+                enemy_texture,
                 square.x - square.size / 2.0,
                 square.y - square.size / 2.0,
-                square.size,
-                square.size,
-                square.color,
+                WHITE,
+                DrawTextureParams {
+                    dest_size: Some(vec2(square.size, square.size)),
+                    source: Some(enemy_frame.source_rect),
+                    ..Default::default()
+                },
             );
         }
 
