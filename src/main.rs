@@ -1,3 +1,4 @@
+use macroquad::audio::{load_sound, play_sound, play_sound_once, stop_sound, PlaySoundParams};
 use macroquad::experimental::animation::{AnimatedSprite, Animation};
 use macroquad::prelude::*;
 use macroquad::rand::ChooseRandom;
@@ -239,6 +240,12 @@ async fn main() {
         true,
     );
 
+    // audio
+
+    let theme_music = load_sound("8bit-spaceshooter.ogg").await.unwrap();
+    let sound_explosion = load_sound("explosion.wav").await.unwrap();
+    let sound_laser = load_sound("laser.wav").await.unwrap();
+
     // shader
     let mut direction_modifier: f32 = 0.0;
     let render_target = render_target(320, 150);
@@ -313,6 +320,14 @@ async fn main() {
                     circle.y = screen_height() / 2.0;
                     score = 0;
                     game_state = GameState::Playing;
+                    // play background music
+                    play_sound(
+                        &theme_music,
+                        PlaySoundParams {
+                            looped: true,
+                            volume: 1.,
+                        },
+                    );
                 }
                 let text = "Press space";
                 let text_dimensions = measure_text(text, None, 50, 1.0);
@@ -366,6 +381,7 @@ async fn main() {
                                 }),
                                 vec2(square.x, square.y),
                             ));
+                            play_sound_once(&sound_explosion);
                         }
                     }
                 }
@@ -405,9 +421,11 @@ async fn main() {
                         color: RED,
                         kind: ShapeType::Circle,
                     });
+                    play_sound_once(&sound_laser);
                 }
                 if is_key_pressed(KeyCode::Escape) {
                     game_state = GameState::Paused;
+                    stop_sound(&theme_music);
                 }
 
                 // CIRCLE PARTICLES
@@ -439,6 +457,14 @@ async fn main() {
             GameState::Paused => {
                 if is_key_pressed(KeyCode::Space) {
                     game_state = GameState::Playing;
+                    // play background music
+                    play_sound(
+                        &theme_music,
+                        PlaySoundParams {
+                            looped: true,
+                            volume: 1.,
+                        },
+                    );
                 }
                 let text = "Paused";
                 let text_dimensions = measure_text(text, None, 50, 1.0);
